@@ -1,0 +1,258 @@
+#!/bin/sh
+
+# parameter: 1: cmd, 2: comparestring, 3: sleep time
+processQC() {
+    # log the command
+    echo "$1" >> ../T3logs.txt 
+    echo "$1"
+    # execute the command and log its output to a file
+    output=$($1 2>&1)
+    echo "$output" >> ../T3logs.txt
+
+    # sleep for the specified duration
+    sleep $3
+
+    # compare the output with the specified string
+    if [[ "$output" == *"$2"* ]]; then
+        echo "Success" >> ../T2logs.txt
+    else
+        echo "Failed" >> ../T2logs.txt
+    fi
+}
+
+cd 6170
+
+# cmd 1
+cmd="cat /proc/cpuinfo | grep \"model name\""
+compare="Intel(R) Xeon(R) Silver 4110 CPU @ 2.10GHz"
+duration=5
+processQC "$cmd" "$compare" "$duration"
+
+#cmd 2
+cmd="cat /proc/meminfo"
+compare="65602744"
+duration=1
+processQC "$cmd" "$compare" "$duration"
+
+#cmd 3
+cmd="dmidecode -t 17"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+
+
+#cmd 4
+cmd="ipmitool sdr | grep FAN"
+compare="FAN6"
+duration=5
+processQC "$cmd" "$compare" "$duration"
+
+#cmd 5
+cmd="ipmitool sensor | grep PSU"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+
+#cmd 6
+cmd="lsblk"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+
+if lsblk | grep sda && ! mount | grep "on / " | grep -q "sda"; then
+cmd="hdparm -I /dev/sda"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+if lsblk | grep sdb && ! mount | grep "on / " | grep -q "sdb"; then
+cmd="hdparm -I /dev/sdb"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+if lsblk | grep sdc && ! mount | grep "on / " | grep -q "sdc"; then
+cmd="hdparm -I /dev/sdc"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+if lsblk | grep sdd && ! mount | grep "on / " | grep -q "sdd"; then
+cmd="hdparm -I /dev/sdd"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+if lsblk | grep sda && ! mount | grep "on / " | grep -q "sda"; then
+cmd="hdparm -I /dev/sda | grep \"Firmware\""
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+if lsblk | grep sdb && ! mount | grep "on / " | grep -q "sdb"; then
+cmd="hdparm -I /dev/sdb | grep \"Firmware\"" 
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+if lsblk | grep sdc && ! mount | grep "on / " | grep -q "sdc"; then
+cmd="hdparm -I /dev/sdc | grep \"Firmware\"" 
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+if lsblk | grep sdd && ! mount | grep "on / " | grep -q "sdd"; then
+cmd="hdparm -I /dev/sdd | grep \"Firmware\"" 
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+
+#cmd 7
+cmd="lspci | grep -i co-processor"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+
+#cmd 8
+cmd="lspci -vtnn | grep 37c8"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+
+# cmd 9
+c9="ipmitool hpm check"
+echo "$c9" >> ../T2logs.txt 
+output=$($c9 2>&1)
+echo "$output" >> ../T2logs.txt
+sleep 2
+if [[ "$output" == *"1.02"* ]] && [[ "$output" = *"1.36 00000000 |   1.36 00000000"* ]] && [[ "$output" = *"2.24 00000000 |   2.24 00000000"* ]] && [[ "$output" = *"16.00"* ]]; then
+    echo "Success \n $c9" >> ../T3logs.txt
+else
+    echo "Failed \n $c9" >> ../T2logs.txt
+fi
+
+#cmd 10
+cmd="eeupdate64e /all /mac_dump"
+compare=""
+duration=10
+processQC "$cmd" "$compare" "$duration"
+#cmd 11
+cmd="ipmitool fru print"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+#cmd 8
+cmd="ipmitool raw 0x04 0x13 0x02 0x00 0x00 | tr -d \"\""
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+
+#cmd 9
+lseth
+c9array=("b01p0" "b02p0" "b3fp0" "b3fp1" \
+"b60p0" "b60p1" "b60p2" "b60p3" \
+"b61p0" "b61p1" "b61p2" "b61p3" \
+"b88p0" "b88p1" "b88p2" "b88p3" \
+"bdap0" "bdap1" "bdap2" "bdap3" \
+"bdbp0" "bdbp1" "bdbp2" "bdbp3")
+
+for i in ${c9array[@]}; do
+    echo "ethtool -i $i"
+    echo "ethtool -i $i" >> ../T2logs.txt
+    output=$(ethtool -i $i 2>&1)
+    echo $output >> ../T2logs.txt
+    sleep 1
+done
+
+c24array=("01:00.0 02:00.0;3f:00.0 3f:00.1;b60p0 b60p1 b60p2 b60p3;b61p0 b61p1 b61p2 b61p3;b88p0 b88p1 b88p2 b88p3;bdap0 bdap1 bdap2 bdap3;bdbp0 bdbp1 bdbp2 bdbp3")
+for i in $(echo "${c24array[@]}" | tr ';' '\n'); do
+    echo "./sts_eth_pktgen.sh -n 1000000 -x $i"
+    echo "./sts_eth_pktgen.sh -n 1000000 -x $i" >> ../T2logs.txt
+    output=$(./sts_eth_pktgen.sh -n 1000000 -x $i 2>&1)
+    echo $output >> ../T2logs.txt
+    sleep 25
+    if [[ "$output" == *"PASS"* ]]; then
+        echo "Success" >> ../T2logs.txt
+    else
+        echo "Failed" >> ../T2logs.txt
+    fi
+done
+
+#cmd 10
+if lsblk | grep sda && ! mount | grep "on / " | grep -q "sda"; then
+cmd="smartctl -a /dev/sda"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+cmd="smartctl -q noserial -a /dev/sda"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+if lsblk | grep sdb && ! mount | grep "on / " | grep -q "sdb"; then
+cmd="smartctl -a /dev/sdb"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+cmd="smartctl -q noserial -a /dev/sdb"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+if lsblk | grep sdc && ! mount | grep "on / " | grep -q "sdc"; then
+cmd="smartctl -a /dev/sdc"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+cmd="smartctl -q noserial -a /dev/sdc"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+if lsblk | grep sdd && ! mount | grep "on / " | grep -q "sdd"; then
+cmd="smartctl -a /dev/sdd"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+cmd="smartctl -q noserial -a /dev/sdd"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+fi
+
+
+
+cd 6170
+#./sn_mac.sh
+#poweroff
+: <<'COMMENT'
+
+redirect its standard error output (stderr) to the same file using 2>&1. 
+This will ensure that both the stdout and stderr of the command are logged to the file.
+
+BLUEMAX login: root
+Password: secui00@!
+//부팅된후 30초 정도 지나면 LCM에 정보들이 디스플레이 되는데 여기서 시리얼 번호가 라벨과 매칭되는지 확인한다.
+//show mass-status는 DOA일 경우에만 실행한다.
+show mass-status
+supermode
+// supermode 암호는 blue<MAC 뒷자리 4개>max<오늘 일자. 6일이면 06>
+//예시:blue067cmax06
+
+cat /secui/data/SN_MAC.info
+
+ip vrf exec pnet-vrf ssh 11.11.1
+secui00@!
+
+cat /var/log/anaconda/packaging.log | grep secui-coreapps | grep Installed
+
+date 122113042022
+hwclock -w
+hwclock
+dmesg | grep "mce:[Hardware Error]"
+dmesg | grep "mce"
+dmesg | grep "ATA bus error"
+dmesg | grep "error"
+poweroff
+COMMENT

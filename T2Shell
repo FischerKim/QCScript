@@ -1,0 +1,220 @@
+#!/bin/sh
+
+# parameter: 1: cmd, 2: comparestring, 3: sleep time
+processQC() {
+    # log the command
+    echo "$1" >> ../T2logs.txt 
+    echo "$1"
+    # execute the command and log its output to a file
+    output=$($1 2>&1)
+    echo "$output" >> ../T2logs.txt
+
+    # sleep for the specified duration
+    sleep $3
+
+    # compare the output with the specified string
+   # if echo "$output" | grep -q "$2"; then
+    #    echo "Success" >> ../T2logs.txt
+   # else
+    #    echo "Failed" >> ../T2logs.txt
+    #fi
+
+    if [[ "$output" == *"$2"* ]]; then
+        echo "Success" >> ../T2logs.txt
+    else
+        echo "Failed" >> ../T2logs.txt
+    fi
+}
+
+cd 6170
+
+# cmd 1
+cmd="ipmitool raw 0x2e 0x71 0x39 0x28 0x00 1"
+compare="39 28 00 00"
+duration=2
+processQC "$cmd" "$compare" "$duration"
+
+# cmd 2
+c2="ipmitool hpm check"
+echo "$c2" >> ../T2logs.txt 
+output=$($c2 2>&1)
+echo "$output" >> ../T2logs.txt
+sleep 5
+if [[ "$output" == *"1.02"* ]] && [[ "$output" = *"1.36 00000000 |   1.36 00000000"* ]] && [[ "$output" = *"2.24 00000000 |   2.24 00000000"* ]] && [[ "$output" = *"16.00"* ]]; then
+    echo "Success" >> ../T2logs.txt
+else
+    echo "Failed" >> ../T2logs.txt
+fi
+
+#cmd 3
+cmd="ipmitool sel clear"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+#cmd 4
+cmd="ipmitool sel list"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+#cmd 5
+cmd="./chk_system_err.sh"
+compare="[PASS]"
+duration=5
+processQC "$cmd" "$compare" "$duration"
+#cmd 6
+cmd="eeupdate64e"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+#cmd 7~9
+lspci -n -d 8086:1572 -vvv | grep -i width > pcie.log
+cmd="grep -c \"Width x8\" pcie.log"
+compare="8"
+processQC "$cmd" "$compare" "$duration"
+cmd="grep -c \"Speed 8GT/s\" pcie.log"
+processQC "$cmd" "$compare" "$duration"
+cmd="rm -rf pcie.log"
+compare=""
+processQC "$cmd" "$compare" "$duration"
+#cmd 10
+cmd="lspci | grep -i co-processor"
+duration=1
+compare="C62x Chipset QuickAssist Technology (rev 04)"
+processQC "$cmd" "$compare" "$duration"
+#cmd 11
+cmd="lspci | grep -ic co-processor"
+duration=2
+compare="4"
+processQC "$cmd" "$compare" "$duration"
+#cmd 12
+#TIME=$(date +'%Y-%m-%d %H:%M:%S')
+#cmd=$(./setCHK_time_new.sh -s ${TIME})
+#duration=1
+#compare="RTC Set Passed"
+#processQC "$cmd" "$compare" "$duration"
+#cmd 13
+c13array=("b01p0" "b02p0" "b3fp0" "b3fp1")
+for i in ${c13array[@]}; do
+    echo "ethtool -i $i" >> ../T2logs.txt
+    output=$(ethtool -i $i 2>&1)
+    echo $output >> ../T2logs.txt
+    sleep 1
+done
+#cmd 14
+cmd="ipmitool fru"
+compare=""
+duration=5
+processQC "$cmd" "$compare" "$duration"
+#cmd 15
+cmd="./bios_chk.sh 6170F224 09/14/2020"
+compare="BIOS Test Passed"
+duration=5
+processQC "$cmd" "$compare" "$duration"
+#cmd 16
+cmd="./cpu_chk.sh \"intel(r) xeon(r) silver 4110 cpu @ 2.10ghz\" 32"
+compare="CPU Test Passed"
+duration=1
+processQC "$cmd" "$compare" "$duration"
+#cmd 17
+cmd="./memory_test.sh -v 8 2933 8"
+compare="Memory Test Passed"
+duration=1
+processQC "$cmd" "$compare" "$duration"
+#cmd 18
+c19array=("CPU1_DIMM_A1" "CPU1_DIMM_B1" "CPU2_DIMM_A1" "CPU2_DIMM_B1")
+for i in ${c19array[@]}; do
+    echo "dmidecode -t memory | grep $i -B 3" >> ../T2logs.txt 
+    output=$(dmidecode -t memory | grep $i -B 3 2>&1) 
+    echo $output >> ../T2logs.txt
+    sleep 5
+done
+#cmd 19
+cmd="./ssd_ratechk.sh 1920"
+compare="The test pass"
+duration=20
+processQC "$cmd" "$compare" "$duration"
+#cmd 20
+cmd="./hdd_test_nochg.sh 4"
+compare="DISK Test Passed"
+duration=10
+processQC "$cmd" "$compare" "$duration"
+# what is the matching phrase for a pass?
+#cmd 21
+cmd="./usb3_test.sh 2 2"
+compare=""
+duration=5
+processQC "$cmd" "$compare" "$duration"
+#cmd 22
+cmd="ipmitool sdr | grep -c ok"
+compare="91"
+duration=3
+processQC "$cmd" "$compare" "$duration"
+#cmd 23
+c24array=("01:00.0 02:00.0" "3f:00.0 3f:00.1")
+for i in ${c24array[@]}; do
+    echo "./sts_eth_pktgen.sh -n 1000000 -x $i" >> ../T2logs.txt
+    output=$(./sts_eth_pktgen.sh -n 1000000 -x $i 2>&1)
+    echo $output >> ../T2logs.txt
+    sleep 25
+    if [[ "$output" == *"PASS"* ]]; then
+    echo "Success" >> ../T2logs.txt
+    else
+    echo "Failed" >> ../T2logs.txt
+fi
+done
+#cmd 24
+cmd="./tool4tpm -productiontest"
+compare="Tests of the TPM hardware finished, no errors"
+duration=20
+processQC "$cmd" "$compare" "$duration"
+#cmd 25
+ipmitool picmg led set 0 0x01 255 1 0x0f
+echo "Orange LED ON. Press Enter to continue"
+read
+echo "Continuing.."
+ipmitool picmg led set 0 0x01 0 1 0x0f
+echo "Orange LED OFF. Press Enter to continue"
+read
+echo "Continuing.."
+ipmitool picmg led set 0 0x00 255 1 0x0f
+echo "Blue LED ON. Press Enter to continue"
+read
+echo "Continuing.."
+ipmitool picmg led set 0 0x00 0 1 0x0f
+echo "Blue LED OFF. Press Enter to continue"
+read
+echo "Continuing.."
+#cmd 26
+ipmitool sensor | grep -i case
+#cmd 27
+cmd="ipmitool raw 0x04 0x13 0x02 0x00 0x00"
+compare=""
+duration=1
+processQC "$cmd" "$compare" "$duration"
+#cd /root/6170/lcmclear/
+#tclsh
+#ln -s /dev/ttyS1 /dev/lcd
+#load CW100.so CW_print
+#CW_print 13 1 1 1 1 1 1
+#CW_print 101 1 1 1 1 1 1
+#CW_print 13 1 1 1 1 1 1
+#CW_print 6 1 1 1 1 1 1
+#lcd_print -m 6 -x 0 -y 0 -t "Hello,AKMC"
+#lcd_print -m 6 -x 0 -y 1 -t "Hello,AKMC"
+#lcd_print -m 6 -x 0 -y 2 -t "Hello,AKMC"
+#lcd_print -m 6 -x 0 -y 3 -t "Hello,AKMC"
+#exit
+cd /root/6170
+cmd="./usb_port_chk.sh"
+compare="./usb_port_chk.sh pass"
+duration=1
+cmd="ipmitool sel clear"
+compare=""
+duration=1
+cmd="ipmitool sel list"
+compare=""
+duration=1
+cmd="./chk_system_err.sh"
+compare="[PASS]"
+duration=3
+#poweroff
